@@ -1,4 +1,7 @@
 
+## This analysis provided data for this thread: https://twitter.com/amosbudde/status/1337499248695230464
+## Data output here https://docs.google.com/spreadsheets/d/1JCQg-Vpp4ys9u0iTKhrCnGw7axO98EYwudvS49YCVV8/edit#gid=1038754191
+
 library(tidyverse)
 library(googlesheets4)
 
