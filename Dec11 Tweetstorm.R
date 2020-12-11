@@ -1,5 +1,6 @@
 
 library(tidyverse)
+library(googlesheets4)
 
 ## parcel data and mpls2040 data from https://opendata.minneapolismn.gov/
 rd_parcels <- read.csv("/Users/amosbudde/Downloads/Assessors_Parcel_Data_2020.csv",colClasses=c("APN"="character"))
@@ -10,7 +11,7 @@ rd_mpls2040 <- read.csv("/Users/amosbudde/Downloads/Future_Land_Use_and_Built_Fo
 mpls_data <- merge(x=rd_mpls2040, y=rd_parcels, by.x = "PID", by.y = "APN", all = TRUE) %>%
   select(PID, FORMATTED_ADDRESS, ZIPCODE, NEIGHBORHOOD, WARD, LANDUSE, Land_Use, Built_Form, 
          ZONING, ABOVEGROUNDAREA, PARCEL_AREA_SQFT, TOTAL_UNITS, PROPERTY_TYPE, 
-         LANDVALUE, BUILDINGVALUE, TOTALVALUE, BEDROOMS, ABOVEGROUNDAREA
+         TOTALVALUE, BEDROOMS, ABOVEGROUNDAREA
          ) %>% 
   filter(
     !is.na(PID),                          #remove records without a parcel ID - these are just a few odd cases
@@ -38,33 +39,42 @@ mpls_data <- merge(x=rd_mpls2040, y=rd_parcels, by.x = "PID", by.y = "APN", all 
     ) %>%
   mutate(nonconforming_any = pmax(noncomforming_far, nonconforming_lot_size))
 
+### START TWITTER THREAD ###
 
-mpls_data %>%
-  filter (Built_Form == 'Interior 1', TOTAL_UNITS == 3, nonconforming_any == 1)
+#1 14,678 (19%) of homes are non-conforming (2524 have FAR to high, 13650 have lot size too small, some have both.). 
+chart1 <- mpls_data %>%
+  summarize("1-3 Unit Homes in MPLS" = n(), 
+            "Non-Conforming: Any reason" = mean(nonconforming_any), 
+            "FAR too high" = mean(noncomforming_far), 
+            "Lot Size too small" = mean(nonconforming_lot_size)
+  )
 
-mpls_data %>%
-  group_by(TOTAL_UNITS, Built_Form) %>%
-  summarize(n(), mean(FAR), mean(noncomforming_far), mean(nonconforming_lot_size), mean(nonconforming_any))
+#2 Break out by # units. 19% of duplexes and 37% of triplexes in Interior Districts. 
+chart2 <- mpls_data %>%
+  group_by(TOTAL_UNITS) %>%
+  summarize("1-3 Unit Homes in MPLS" = n(), 
+            "Non-Conforming: Any reason" = mean(nonconforming_any), 
+            "FAR too high" = mean(noncomforming_far), 
+            "Lot size too small" = mean(nonconforming_lot_size)
+  )
 
+#3 By Ward! 
+chart3 <- mpls_data %>%
+  group_by(WARD) %>%
+  summarize("1-3 Unit Homes in MPLS" = n(), 
+            "Non-Conforming: Any reason" = mean(nonconforming_any), 
+            "FAR too high" = mean(noncomforming_far), 
+            "Lot size too small" = mean(nonconforming_lot_size)
+  )
 
-## share of lots nonconforming by WARD. 
-## THERE IS AN ANALYSIS HERE TO RUN. How many I1/2/3 lots are illegal to build? Where are they distributed? 
-#Tweet #1. 14k. 
-# There are 75,482 1-3 unit homes in Minneapolis. 
-# 18% of them are nonconforming because they are on a lot size lower than the minimum. 
-# 4% are nonconforming because their FAR is too large. 
-# 20% overall couldn't be built today. 
-# But because existing housing stock is over 89% SFHs, this is not quite fair. Actually it's 50% of triplexes, 30% of duplexes, etc. So these rules make it harder. 
-# This also shows how much a 0.5 FAR cap does not affect our SFH stock, but it does impact our 2-3plex housing stock. 
-# And this is looking at current data. So though Minneapolis allowed 3plexes, the city's interior neighborhoods are not getting any denser than the status quo. 
+#4 By Neighborhood? 
+chart4 <- mpls_data %>%
+  group_by(NEIGHBORHOOD) %>%
+  summarize("1-3 Unit Homes in MPLS" = n(), 
+            "Non-Conforming: Any reason" = mean(nonconforming_any), 
+            "FAR too high" = mean(noncomforming_far), 
+            "Lot size too small" = mean(nonconforming_lot_size)
+  )
 
-mpls_data %>%
-
-  mutate(FAR_OVER050 = case_when(FAR > 0.5 ~ 1 , TRUE ~ 0)) %>%
-  mutate(illegal_to_build = case_when(is_nonconforming == 1 | FAR > 0.5 ~ 1 , TRUE ~ 0)) %>%
-#  group_by(TOTAL_UNITS) %>%
-  summarize(n(), mean(is_nonconforming), mean(FAR_OVER050), mean(illegal_to_build))
-
-mpls_data %>%
-  filter(substr(Built_Form,1,8) == 'Interior') %>%
-  filter(NEIGHBORHOOD == 'UNIVERSITY', FAR > 0.5)
+# make Google sheets
+gs4_create("twitter_charts_dec11",  sheets = list(chart1,chart2,chart3,chart4))
